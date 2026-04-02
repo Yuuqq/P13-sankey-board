@@ -14,10 +14,19 @@
   <meta property="og:description" content="黑金流向桑基图画板 — 前端纯静态新闻工具" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://yuuqq.github.io/P13-sankey-board/" />
+  <link rel="manifest" href="./manifest.json" />
+<style media="print">
+.gnav,.pedagogy-panel,.explore-section,[class*="dark-toggle"],button[aria-label]{display:none!important}
+body{background:#fff!important;color:#000!important;font-size:11pt}
+.app,main,.container{box-shadow:none!important;border:none!important;padding:0!important}
+a{color:#000!important;text-decoration:underline}
+a[href]::after{content:" (" attr(href) ")";font-size:9pt;color:#666}
+@page{margin:2cm}
+</style>
 </head>
 
 <body>
-  <main class="app">
+  <main aria-label="主内容区域" class="app">
     <header class="hero">
       <h1>黑金流向桑基图快捷画板</h1>
       <p>输入“来源 -> 去向 金额”文本，自动生成资金流向桑基图。</p>
@@ -25,21 +34,28 @@
     </header>
 
     <section class="card">
+      <details class="teach-card" open>
+        <summary>🎓 桑基图在调查报道中的应用</summary>
+        <p>桑基图（Sankey Diagram）是一种用于展示“流向”关系的可视化图表，带宽与数量成正比。在新闻调查中常用于：<strong>资金流向追踪</strong>（如政治献金、贪腐案资金链）、<strong>信息传播路径</strong>（虚假信息扩散路线）、<strong>资源分配</strong>（财政预算分流）等场景。</p>
+      </details>
+    </section>
+
+    <section class="card">
       <label for="input">关系输入（每行一条）</label>
       <textarea id="input" rows="10"></textarea>
       <div class="actions">
-        <button id="drawBtn" type="button">生成桑基图</button>
-        <button id="exportSvgBtn" type="button" class="btn-secondary">导出 SVG</button>
-        <button id="exportPngBtn" type="button" class="btn-secondary">导出 PNG</button>
+        <button id="drawBtn" type="button" aria-label="draw">生成桑基图</button>
+        <button id="exportSvgBtn" type="button" class="btn-secondary" aria-label="export Svg">导出 SVG</button>
+        <button id="exportPngBtn" type="button" class="btn-secondary" aria-label="export Png">导出 PNG</button>
       </div>
-      <p id="status" aria-live="polite">状态: 等待输入</p>
+      <p id="status" role="status" aria-live="polite">状态: 等待输入</p>
     </section>
 
     <section class="card">
       <div id="chart" class="chart"></div>
     </section>
   </main>
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" crossorigin="anonymous"></script>
+  <script src="../shared/vendor/echarts.min.js"></script>
   <script src="./pm-metrics.js" defer></script>
   <script src="./app.js" defer></script>
 
@@ -49,11 +65,22 @@
   </div>
 
   <!-- Cross-Project Navigation -->
-  <nav
+  <nav aria-label="工具箱导航"
     style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;font-size:13px;border-top:1px solid #e5e5e5;margin-top:16px;color:#666;">
-    <a href="https://yuuqq.github.io/_codex/" style="text-decoration:none;">📋 工具箱导航</a>
+    <a href="https://yuuqq.github.io/journalism-toolbox/" style="text-decoration:none;">📋 工具箱导航</a>
     <span style="opacity:.4">P13</span>
   </nav>
+  <script src="../shared/dark-toggle.js" defer></script>
+  <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').catch(()=>{})}</script>
+  <script src="../shared/cmd-palette.js" defer></script>
+  <script src="../shared/toast.js" defer></script>
+  <script src="../shared/onboarding.js" defer></script>
+
+  <script src="../shared/pedagogy-data-p1.js" defer></script>
+  <script src="../shared/pedagogy-data-p2.js" defer></script>
+  <script src="../shared/global-nav.js" defer></script>
+  <script src="../shared/kbd-hints.js" defer></script>
 </body>
 
 </html>
+
