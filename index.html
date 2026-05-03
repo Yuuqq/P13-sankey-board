@@ -6,6 +6,8 @@
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📰</text></svg>" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f3fbf5">
+  <meta name="color-scheme" content="light dark">
   <title>P13 黑金流向桑基图快捷画板</title>
     <link rel="stylesheet" href="../shared/design-tokens.css" />
 <link rel="stylesheet" href="./styles.css" />
@@ -26,7 +28,8 @@ a[href]::after{content:" (" attr(href) ")";font-size:9pt;color:#666}
 </head>
 
 <body>
-  <main aria-label="主内容区域" class="app">
+  <a href="#main" class="skip-link">跳到主内容 / Skip to main content</a>
+  <main id="main" aria-label="主内容区域" class="app">
     <header class="hero">
       <h1>黑金流向桑基图快捷画板</h1>
       <p>输入“来源 -> 去向 金额”文本，自动生成资金流向桑基图。</p>
