@@ -43,9 +43,9 @@ a[href]::after{content:" (" attr(href) ")";font-size:9pt;color:#666}
       <label for="input">关系输入（每行一条）</label>
       <textarea id="input" rows="10"></textarea>
       <div class="actions">
-        <button id="drawBtn" type="button" aria-label="draw">生成桑基图</button>
-        <button id="exportSvgBtn" type="button" class="btn-secondary" aria-label="export Svg">导出 SVG</button>
-        <button id="exportPngBtn" type="button" class="btn-secondary" aria-label="export Png">导出 PNG</button>
+        <button id="drawBtn" type="button">生成桑基图</button>
+        <button id="exportSvgBtn" type="button" class="btn-secondary">导出 SVG</button>
+        <button id="exportPngBtn" type="button" class="btn-secondary">导出 PNG</button>
       </div>
       <p id="status" role="status" aria-live="polite">状态: 等待输入</p>
     </section>
@@ -55,6 +55,7 @@ a[href]::after{content:" (" attr(href) ")";font-size:9pt;color:#666}
     </section>
   </main>
   <script src="./pm-metrics.js" defer></script>
+<script src="../shared/vendor/echarts.min.js" defer></script>
 <script src="./app.js" defer></script>
 
   <!-- Privacy Notice -->

@@ -159,7 +159,7 @@ function draw() {
 function exportSvg() {
   try {
     if (!chartInstance) {
-      setStatus("离线降级模式下无法导出，请联网后再试");
+      setStatus("导出失败");
       return;
     }
     const svgEl = chartEl.querySelector("svg");
@@ -192,7 +192,7 @@ function exportSvg() {
 function exportPng() {
   try {
     if (!chartInstance) {
-      setStatus("离线降级模式下无法导出，请联网后再试");
+      setStatus("导出失败");
       return;
     }
     const dataUrl = chartInstance.getDataURL({
@@ -244,16 +244,4 @@ drawBtn.click();
       }
     }, { once: false });
   } catch (_e) {}
-})();
-
-
-// === Auto-load demo Sankey data ===
-(function() {
-  setTimeout(function() {
-    var ta = document.getElementById('dataInput') || document.querySelector('textarea');
-    if (ta && !ta.value.trim()) {
-      ta.value = '财政收入,教育支出,500\n财政收入,医疗卫生,300\n财政收入,社会保障,250\n财政收入,交通基建,200\n财政收入,科技研发,150\n教育支出,义务教育,280\n教育支出,高等教育,150\n教育支出,职业教育,70\n医疗卫生,公立医院,180\n医疗卫生,社区卫生,80\n医疗卫生,疾病防控,40\n社会保障,养老金,120\n社会保障,失业保险,60\n社会保障,低保补贴,70';
-      ta.dispatchEvent(new Event('input', {bubbles:true}));
-    }
-  }, 500);
 })();
