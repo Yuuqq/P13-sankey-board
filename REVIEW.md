@@ -9,9 +9,9 @@ This document summarizes the findings from a comprehensive review of the `Yuuqq/
 ## HIGH
 
 ### 1. Reliability (Edge Case Crash): Lack of cyclic graph detection
-- **File:** `app.js` (lines 80-107, `draw()` function)
+- **File:** `app.js` (lines 128-154, `draw()` function)
 - **Impact:** ECharts Sankey diagrams do not support cyclic dependencies (e.g., A -> B, B -> A). If a user inputs cyclic data, ECharts will fail to render, potentially throwing an error and leaving the user with a blank chart or an unhelpful status, without clear feedback.
-- **Fix Suggestion:** Implement a topological sort or simple depth-first search (DFS) to detect cycles before passing the nodes and links to ECharts. If a cycle is detected, abort rendering and display a clear error message via `setStatus()`.
+- **Fix Suggestion:** Implement a depth-first search (DFS) to detect cycles before passing the nodes and links to ECharts. If a cycle is detected, abort rendering and display a clear error message via `setStatus()`. Also add a `try/catch` around `setOption`, handle self-loops (`A -> A 100`), and aggregate duplicate edges to make rendering more robust.
 
 ### 2. Test Coverage: Lack of automated tests
 - **File:** Entire repository (No `tests/` directory)
@@ -26,18 +26,18 @@ This document summarizes the findings from a comprehensive review of the `Yuuqq/
 - **Fix Suggestion:** Wrap the application logic in IIFEs or migrate to ES6 modules (`<script type="module">`). Explicitly pass dependencies rather than relying on the global `window` object.
 
 ### 4. Reliability: Silent failure on invalid input lines
-- **File:** `app.js` (line 44, `parseLine()`)
+- **File:** `app.js` (line 56, `parseLine()`)
 - **Impact:** The regex `/^\s*(.+?)\s*->\s*(.+?)\s+([0-9.]+)\s*$/` strictly requires a specific format. If a user makes a typo (e.g., negative values, missing spaces, or non-numeric trailing characters), the line is silently ignored because `parseLine` returns `null` and `filter(Boolean)` drops it. Users get no feedback on why their data wasn't rendered.
 - **Fix Suggestion:** Instead of silently filtering out invalid lines, capture them and update the status area (`setStatus`) or show a UI warning listing the lines that could not be parsed.
 
 ### 5. Performance: Un-debounced window resize handler
-- **File:** `app.js` (line 67, `window.addEventListener("resize", ... )`)
+- **File:** `app.js` (line 93, `window.addEventListener("resize", ... )`)
 - **Impact:** The `resize` event fires continuously while the browser window is being resized. Calling `chartInstance?.resize()` on every fire can lead to layout thrashing and high CPU usage.
 - **Fix Suggestion:** Wrap the `chartInstance?.resize()` call in a debounce function (e.g., triggering only after 150-250ms of inactivity).
 
 ### 6. Security / Privacy: Raw URI Hash and Pathname in Telemetry
 - **File:** `pm-metrics.js` (line 46)
-- **Impact:** The payload includes `page_path: location.pathname + location.hash`. If this payload is sent to a dashboard and rendered insecurely, it could present an XSS vector. While not explicitly an XSS locally, it is an unsafe default for data collection.
+- **Impact:** The payload includes `page_path: location.pathname + location.hash`. However, currently telemetry is only written to `localStorage` locally without any external `fetch` or `sendBeacon`, meaning there is no upload to a server and thus it is not a real XSS vector under the current threat model.
 - **Fix Suggestion:** Sanitize or truncate `location.hash` before adding it to the telemetry payload, or remove it entirely if not strictly necessary for analytics.
 
 ### 7. Documentation / DX: Missing Local Development Setup
@@ -49,10 +49,10 @@ This document summarizes the findings from a comprehensive review of the `Yuuqq/
 
 ### 8. Architecture: Fragile dependency paths
 - **File:** `index.html` (lines 10, 52, 60), `sw.js` (lines 14, 15)
-- **Impact:** The project hardcodes paths to `../shared/` (e.g., `../shared/design-tokens.css`). This tightly couples the tool to a specific monorepo structure. If the tool is deployed independently, it will break.
+- **Impact:** The project hardcodes paths to `../shared/` (e.g., `../shared/design-tokens.css`). This tightly couples the tool to a specific monorepo structure. If the tool is deployed independently, it will break. More importantly, the Service Worker (`sw.js`) does not pre-cache `echarts.min.js`, breaking the 'PWA Offline Ready' claim made in the README.
 - **Fix Suggestion:** If `shared` is truly shared, consider publishing it as an npm package or using Git submodules, and bundle the assets using a build step, rather than relying on relative directory traversal out of the project root.
 
 ### 9. Reliability: Blind error swallowing in Service Worker installation
-- **File:** `sw.js` (line 21)
+- **File:** `sw.js` (lines 26-29)
 - **Impact:** The service worker silently catches errors when caching optional files `cache.add(url).catch(() => {})`. If critical assets fail to load due to network issues, developers have no visibility into the issue during debugging.
 - **Fix Suggestion:** Add a `console.warn` inside the `.catch()` block to log which specific asset failed to cache.

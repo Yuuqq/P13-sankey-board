@@ -16,7 +16,8 @@ const CORE_ASSETS = [
   "./app.js",
   "./pm-metrics.js",
   "../shared/design-tokens.css",
-  "../shared/dark-toggle.js"
+  "../shared/dark-toggle.js",
+  "../shared/vendor/echarts.min.js"
 ];
 
 // Install: Pre-cache core assets
@@ -26,7 +27,9 @@ self.addEventListener("install", (event) => {
       return cache.addAll(CORE_ASSETS).catch(() => {
         // Silently skip missing optional files
         return Promise.allSettled(
-          CORE_ASSETS.map((url) => cache.add(url).catch(() => {}))
+          CORE_ASSETS.map((url) => cache.add(url).catch((err) => {
+            console.warn("Failed to cache:", url, err);
+          }))
         );
       });
     })

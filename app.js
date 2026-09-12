@@ -54,8 +54,13 @@ function setStatus(text) {
 }
 
 function parseLine(line) {
-  const m = line.match(/^\s*(.+?)\s*->\s*(.+?)\s+([0-9.]+)\s*$/);
+  // Ignore comment lines
+  if (line.trim().startsWith('#')) return 'comment';
+
+  // Use stricter regex for numbers to avoid parsing "." or "1.2.3"
+  const m = line.match(/^\s*(.+?)\s*->\s*(.+?)\s+([0-9]+(?:\.[0-9]+)?)\s*$/);
   if (!m) return null;
+
   return {
     source: m[1].trim(),
     target: m[2].trim(),
@@ -72,16 +77,77 @@ function makeFilename(ext) {
 
 function parseGraph() {
   const lines = input.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const links = lines.map(parseLine).filter(Boolean);
-  if (!links.length) return null;
+
+  const invalidLines = [];
+  const validLinks = [];
+
+  for (const line of lines) {
+    const parsed = parseLine(line);
+    if (parsed === 'comment') continue;
+    if (parsed === null) {
+      invalidLines.push(line);
+      continue;
+    }
+    // Remove self-loops
+    if (parsed.source === parsed.target) continue;
+    validLinks.push(parsed);
+  }
+
+  if (!validLinks.length) return { nodes: [], links: [], invalidLines };
+
+  // Merge duplicate edges
+  const edgeMap = new Map();
+  for (const link of validLinks) {
+    const key = link.source + '::' + link.target;
+    if (edgeMap.has(key)) {
+      edgeMap.get(key).value += link.value;
+    } else {
+      edgeMap.set(key, { ...link });
+    }
+  }
+  const mergedLinks = Array.from(edgeMap.values());
 
   const set = new Set();
-  links.forEach(l => {
+  mergedLinks.forEach(l => {
     set.add(l.source);
     set.add(l.target);
   });
   const nodes = [...set].map(name => ({ name }));
-  return { nodes, links };
+  return { nodes, links: mergedLinks, invalidLines };
+}
+
+
+function hasCycle(links) {
+  const adj = new Map();
+  for (const l of links) {
+    if (!adj.has(l.source)) adj.set(l.source, []);
+    adj.get(l.source).push(l.target);
+  }
+
+  const visited = new Set();
+  const recursionStack = new Set();
+
+  function dfs(node) {
+    if (recursionStack.has(node)) return true;
+    if (visited.has(node)) return false;
+
+    visited.add(node);
+    recursionStack.add(node);
+
+    const neighbors = adj.get(node) || [];
+    for (const neighbor of neighbors) {
+      if (dfs(neighbor)) return true;
+    }
+
+    recursionStack.delete(node);
+    return false;
+  }
+
+  for (const node of adj.keys()) {
+    if (dfs(node)) return true;
+  }
+
+  return false;
 }
 
 function ensureChart() {
@@ -90,8 +156,12 @@ function ensureChart() {
   try {
     chartEl.replaceChildren();
     chartInstance = window.echarts.init(chartEl, null, { renderer: "svg" });
+    let resizeTimer;
     window.addEventListener("resize", () => {
-      try { chartInstance?.resize(); } catch (_e) {}
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        try { chartInstance?.resize(); } catch (_e) {}
+      }, 200);
     });
     return chartInstance;
   } catch (_e) {
@@ -127,8 +197,13 @@ function renderTextPreview(nodes, links, reason) {
 
 function draw() {
   const graph = parseGraph();
-  if (!graph) {
+  if (!graph || !graph.links || !graph.links.length) {
     setStatus("未识别到有效关系，格式示例：A -> B 500");
+    return;
+  }
+
+  if (hasCycle(graph.links)) {
+    setStatus("渲染失败：数据中存在循环引用（如 A -> B, B -> A），桑基图不支持环状结构。");
     return;
   }
 
@@ -139,18 +214,27 @@ function draw() {
     return;
   }
 
-  instance.setOption({
-    tooltip: { trigger: "item" },
-    series: [{
-      type: "sankey",
-      data: graph.nodes,
-      links: graph.links,
-      lineStyle: { color: "source", curveness: 0.5 },
-      emphasis: { focus: "adjacency" },
-      nodeGap: 12
-    }]
-  });
-  setStatus(`已生成桑基图，关系 ${graph.links.length} 条，节点 ${graph.nodes.length} 个`);
+  try {
+    instance.setOption({
+      tooltip: { trigger: "item" },
+      series: [{
+        type: "sankey",
+        data: graph.nodes,
+        links: graph.links,
+        lineStyle: { color: "source", curveness: 0.5 },
+        emphasis: { focus: "adjacency" },
+        nodeGap: 12
+      }]
+    }, true);
+
+    let statusText = `已生成桑基图，关系 ${graph.links.length} 条，节点 ${graph.nodes.length} 个`;
+    if (graph.invalidLines && graph.invalidLines.length > 0) {
+      statusText += `。（警告：忽略了 ${graph.invalidLines.length} 行无效输入）`;
+    }
+    setStatus(statusText);
+  } catch (err) {
+    setStatus(`渲染失败：${err.message}`);
+  }
 }
 
 /**
