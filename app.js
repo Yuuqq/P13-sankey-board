@@ -9,6 +9,7 @@ const exportPngBtn = document.getElementById("exportPngBtn");
 const statusEl = document.getElementById("status");
 const chartEl = document.getElementById("chart");
 let chartInstance = null;
+let chartReady = false;
 
 input.value = `# 企业资金流向分析示例
 # 线条格式: 源头 -> 目标 金额
@@ -53,21 +54,6 @@ function setStatus(text) {
   statusEl.textContent = `状态: ${text}`;
 }
 
-function parseLine(line) {
-  // Ignore comment lines
-  if (line.trim().startsWith('#')) return 'comment';
-
-  // Use stricter regex for numbers to avoid parsing "." or "1.2.3"
-  const m = line.match(/^\s*(.+?)\s*->\s*(.+?)\s+([0-9]+(?:\.[0-9]+)?)\s*$/);
-  if (!m) return null;
-
-  return {
-    source: m[1].trim(),
-    target: m[2].trim(),
-    value: Number(m[3])
-  };
-}
-
 function pad(n) { return String(n).padStart(2, "0"); }
 
 function makeFilename(ext) {
@@ -76,78 +62,34 @@ function makeFilename(ext) {
 }
 
 function parseGraph() {
-  const lines = input.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-
-  const invalidLines = [];
-  const validLinks = [];
-
-  for (const line of lines) {
-    const parsed = parseLine(line);
-    if (parsed === 'comment') continue;
-    if (parsed === null) {
-      invalidLines.push(line);
-      continue;
-    }
-    // Remove self-loops
-    if (parsed.source === parsed.target) continue;
-    validLinks.push(parsed);
+  if (!window.SankeyGraph) {
+    setStatus("图形解析模块未加载");
+    return null;
   }
-
-  if (!validLinks.length) return { nodes: [], links: [], invalidLines };
-
-  // Merge duplicate edges
-  const edgeMap = new Map();
-  for (const link of validLinks) {
-    const key = link.source + '::' + link.target;
-    if (edgeMap.has(key)) {
-      edgeMap.get(key).value += link.value;
-    } else {
-      edgeMap.set(key, { ...link });
-    }
-  }
-  const mergedLinks = Array.from(edgeMap.values());
-
-  const set = new Set();
-  mergedLinks.forEach(l => {
-    set.add(l.source);
-    set.add(l.target);
-  });
-  const nodes = [...set].map(name => ({ name }));
-  return { nodes, links: mergedLinks, invalidLines };
+  return window.SankeyGraph.parseGraphText(input.value);
 }
 
-
-function hasCycle(links) {
-  const adj = new Map();
-  for (const l of links) {
-    if (!adj.has(l.source)) adj.set(l.source, []);
-    adj.get(l.source).push(l.target);
+function invalidateChart() {
+  chartReady = false;
+  if (chartInstance) {
+    try { chartInstance.dispose(); } catch (_e) {}
+    chartInstance = null;
   }
+  chartEl.replaceChildren();
+}
 
-  const visited = new Set();
-  const recursionStack = new Set();
+let resizeTimer = null;
+let resizeBound = false;
 
-  function dfs(node) {
-    if (recursionStack.has(node)) return true;
-    if (visited.has(node)) return false;
-
-    visited.add(node);
-    recursionStack.add(node);
-
-    const neighbors = adj.get(node) || [];
-    for (const neighbor of neighbors) {
-      if (dfs(neighbor)) return true;
-    }
-
-    recursionStack.delete(node);
-    return false;
-  }
-
-  for (const node of adj.keys()) {
-    if (dfs(node)) return true;
-  }
-
-  return false;
+function bindResize() {
+  if (resizeBound) return;
+  resizeBound = true;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      try { chartInstance?.resize(); } catch (_e) {}
+    }, 200);
+  });
 }
 
 function ensureChart() {
@@ -156,15 +98,10 @@ function ensureChart() {
   try {
     chartEl.replaceChildren();
     chartInstance = window.echarts.init(chartEl, null, { renderer: "svg" });
-    let resizeTimer;
-    window.addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        try { chartInstance?.resize(); } catch (_e) {}
-      }, 200);
-    });
+    bindResize();
     return chartInstance;
   } catch (_e) {
+    chartInstance = null;
     return null;
   }
 }
@@ -197,20 +134,26 @@ function renderTextPreview(nodes, links, reason) {
 
 function draw() {
   const graph = parseGraph();
-  if (!graph || !graph.links || !graph.links.length) {
-    setStatus("未识别到有效关系，格式示例：A -> B 500");
+  if (!graph) return;
+
+  const suffix = window.SankeyGraph.issueWarning(graph);
+  if (!graph.links.length) {
+    invalidateChart();
+    setStatus(`未识别到有效关系，格式示例：A -> B 500${suffix}`);
     return;
   }
 
-  if (hasCycle(graph.links)) {
-    setStatus("渲染失败：数据中存在循环引用（如 A -> B, B -> A），桑基图不支持环状结构。");
+  if (window.SankeyGraph.hasCycle(graph.links)) {
+    invalidateChart();
+    setStatus(`渲染失败：数据中存在循环引用（如 A -> B, B -> A），桑基图不支持环状结构。${suffix}`);
     return;
   }
 
   const instance = ensureChart();
   if (!instance) {
+    chartReady = false;
     renderTextPreview(graph.nodes, graph.links, "外链脚本不可用");
-    setStatus(`已解析关系（降级模式：外链脚本不可用）`);
+    setStatus(`已解析关系（降级模式：外链脚本不可用）${suffix}`);
     return;
   }
 
@@ -226,14 +169,11 @@ function draw() {
         nodeGap: 12
       }]
     }, true);
-
-    let statusText = `已生成桑基图，关系 ${graph.links.length} 条，节点 ${graph.nodes.length} 个`;
-    if (graph.invalidLines && graph.invalidLines.length > 0) {
-      statusText += `。（警告：忽略了 ${graph.invalidLines.length} 行无效输入）`;
-    }
-    setStatus(statusText);
+    chartReady = true;
+    setStatus(`已生成桑基图，关系 ${graph.links.length} 条，节点 ${graph.nodes.length} 个${suffix}`);
   } catch (err) {
-    setStatus(`渲染失败：${err.message}`);
+    invalidateChart();
+    setStatus(`渲染失败：${err && err.message ? err.message : "未知错误"}${suffix}`);
   }
 }
 
@@ -244,6 +184,10 @@ function exportSvg() {
   try {
     if (!chartInstance) {
       setStatus("离线降级模式下无法导出，请联网后再试");
+      return;
+    }
+    if (!chartReady) {
+      setStatus("请先生成桑基图");
       return;
     }
     const svgEl = chartEl.querySelector("svg");
@@ -277,6 +221,10 @@ function exportPng() {
   try {
     if (!chartInstance) {
       setStatus("离线降级模式下无法导出，请联网后再试");
+      return;
+    }
+    if (!chartReady) {
+      setStatus("请先生成桑基图");
       return;
     }
     const dataUrl = chartInstance.getDataURL({
@@ -328,16 +276,4 @@ drawBtn.click();
       }
     }, { once: false });
   } catch (_e) {}
-})();
-
-
-// === Auto-load demo Sankey data ===
-(function() {
-  setTimeout(function() {
-    var ta = document.getElementById('dataInput') || document.querySelector('textarea');
-    if (ta && !ta.value.trim()) {
-      ta.value = '财政收入,教育支出,500\n财政收入,医疗卫生,300\n财政收入,社会保障,250\n财政收入,交通基建,200\n财政收入,科技研发,150\n教育支出,义务教育,280\n教育支出,高等教育,150\n教育支出,职业教育,70\n医疗卫生,公立医院,180\n医疗卫生,社区卫生,80\n医疗卫生,疾病防控,40\n社会保障,养老金,120\n社会保障,失业保险,60\n社会保障,低保补贴,70';
-      ta.dispatchEvent(new Event('input', {bubbles:true}));
-    }
-  }, 500);
 })();
