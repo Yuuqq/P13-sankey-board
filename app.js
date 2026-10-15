@@ -177,19 +177,24 @@ function draw() {
   }
 }
 
+function canExportChart() {
+  if (!window.echarts) {
+    setStatus("离线降级模式下无法导出，请联网后再试");
+    return false;
+  }
+  if (!chartInstance || !chartReady) {
+    setStatus("请先生成桑基图");
+    return false;
+  }
+  return true;
+}
+
 /**
  * Export chart as SVG file download
  */
 function exportSvg() {
   try {
-    if (!chartInstance) {
-      setStatus("离线降级模式下无法导出，请联网后再试");
-      return;
-    }
-    if (!chartReady) {
-      setStatus("请先生成桑基图");
-      return;
-    }
+    if (!canExportChart()) return;
     const svgEl = chartEl.querySelector("svg");
     if (!svgEl) {
       setStatus("请先生成桑基图");
@@ -219,14 +224,7 @@ function exportSvg() {
  */
 function exportPng() {
   try {
-    if (!chartInstance) {
-      setStatus("离线降级模式下无法导出，请联网后再试");
-      return;
-    }
-    if (!chartReady) {
-      setStatus("请先生成桑基图");
-      return;
-    }
+    if (!canExportChart()) return;
     const dataUrl = chartInstance.getDataURL({
       type: "png",
       pixelRatio: 3,
