@@ -9,6 +9,7 @@ const exportPngBtn = document.getElementById("exportPngBtn");
 const statusEl = document.getElementById("status");
 const chartEl = document.getElementById("chart");
 let chartInstance = null;
+let chartReady = false;
 
 input.value = `# 企业资金流向分析示例
 # 线条格式: 源头 -> 目标 金额
@@ -53,16 +54,6 @@ function setStatus(text) {
   statusEl.textContent = `状态: ${text}`;
 }
 
-function parseLine(line) {
-  const m = line.match(/^\s*(.+?)\s*->\s*(.+?)\s+([0-9.]+)\s*$/);
-  if (!m) return null;
-  return {
-    source: m[1].trim(),
-    target: m[2].trim(),
-    value: Number(m[3])
-  };
-}
-
 function pad(n) { return String(n).padStart(2, "0"); }
 
 function makeFilename(ext) {
@@ -71,17 +62,34 @@ function makeFilename(ext) {
 }
 
 function parseGraph() {
-  const lines = input.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const links = lines.map(parseLine).filter(Boolean);
-  if (!links.length) return null;
+  if (!window.SankeyGraph) {
+    setStatus("图形解析模块未加载");
+    return null;
+  }
+  return window.SankeyGraph.parseGraphText(input.value);
+}
 
-  const set = new Set();
-  links.forEach(l => {
-    set.add(l.source);
-    set.add(l.target);
+function invalidateChart() {
+  chartReady = false;
+  if (chartInstance) {
+    try { chartInstance.dispose(); } catch (_e) {}
+    chartInstance = null;
+  }
+  chartEl.replaceChildren();
+}
+
+let resizeTimer = null;
+let resizeBound = false;
+
+function bindResize() {
+  if (resizeBound) return;
+  resizeBound = true;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      try { chartInstance?.resize(); } catch (_e) {}
+    }, 200);
   });
-  const nodes = [...set].map(name => ({ name }));
-  return { nodes, links };
 }
 
 function ensureChart() {
@@ -90,11 +98,10 @@ function ensureChart() {
   try {
     chartEl.replaceChildren();
     chartInstance = window.echarts.init(chartEl, null, { renderer: "svg" });
-    window.addEventListener("resize", () => {
-      try { chartInstance?.resize(); } catch (_e) {}
-    });
+    bindResize();
     return chartInstance;
   } catch (_e) {
+    chartInstance = null;
     return null;
   }
 }
@@ -127,30 +134,59 @@ function renderTextPreview(nodes, links, reason) {
 
 function draw() {
   const graph = parseGraph();
-  if (!graph) {
-    setStatus("未识别到有效关系，格式示例：A -> B 500");
+  if (!graph) return;
+
+  const suffix = window.SankeyGraph.issueWarning(graph);
+  if (!graph.links.length) {
+    invalidateChart();
+    setStatus(`未识别到有效关系，格式示例：A -> B 500${suffix}`);
+    return;
+  }
+
+  if (window.SankeyGraph.hasCycle(graph.links)) {
+    invalidateChart();
+    setStatus(`渲染失败：数据中存在循环引用（如 A -> B, B -> A），桑基图不支持环状结构。${suffix}`);
     return;
   }
 
   const instance = ensureChart();
   if (!instance) {
+    chartReady = false;
     renderTextPreview(graph.nodes, graph.links, "外链脚本不可用");
-    setStatus(`已解析关系（降级模式：外链脚本不可用）`);
+    setStatus(`已解析关系（降级模式：外链脚本不可用）${suffix}`);
     return;
   }
 
-  instance.setOption({
-    tooltip: { trigger: "item" },
-    series: [{
-      type: "sankey",
-      data: graph.nodes,
-      links: graph.links,
-      lineStyle: { color: "source", curveness: 0.5 },
-      emphasis: { focus: "adjacency" },
-      nodeGap: 12
-    }]
-  });
-  setStatus(`已生成桑基图，关系 ${graph.links.length} 条，节点 ${graph.nodes.length} 个`);
+  try {
+    instance.setOption({
+      tooltip: { trigger: "item" },
+      series: [{
+        type: "sankey",
+        data: graph.nodes,
+        links: graph.links,
+        lineStyle: { color: "source", curveness: 0.5 },
+        emphasis: { focus: "adjacency" },
+        nodeGap: 12
+      }]
+    }, true);
+    chartReady = true;
+    setStatus(`已生成桑基图，关系 ${graph.links.length} 条，节点 ${graph.nodes.length} 个${suffix}`);
+  } catch (err) {
+    invalidateChart();
+    setStatus(`渲染失败：${err && err.message ? err.message : "未知错误"}${suffix}`);
+  }
+}
+
+function canExportChart() {
+  if (!window.echarts) {
+    setStatus("离线降级模式下无法导出，请联网后再试");
+    return false;
+  }
+  if (!chartInstance || !chartReady) {
+    setStatus("请先生成桑基图");
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -158,10 +194,7 @@ function draw() {
  */
 function exportSvg() {
   try {
-    if (!chartInstance) {
-      setStatus("离线降级模式下无法导出，请联网后再试");
-      return;
-    }
+    if (!canExportChart()) return;
     const svgEl = chartEl.querySelector("svg");
     if (!svgEl) {
       setStatus("请先生成桑基图");
@@ -191,10 +224,7 @@ function exportSvg() {
  */
 function exportPng() {
   try {
-    if (!chartInstance) {
-      setStatus("离线降级模式下无法导出，请联网后再试");
-      return;
-    }
+    if (!canExportChart()) return;
     const dataUrl = chartInstance.getDataURL({
       type: "png",
       pixelRatio: 3,
@@ -244,16 +274,4 @@ drawBtn.click();
       }
     }, { once: false });
   } catch (_e) {}
-})();
-
-
-// === Auto-load demo Sankey data ===
-(function() {
-  setTimeout(function() {
-    var ta = document.getElementById('dataInput') || document.querySelector('textarea');
-    if (ta && !ta.value.trim()) {
-      ta.value = '财政收入,教育支出,500\n财政收入,医疗卫生,300\n财政收入,社会保障,250\n财政收入,交通基建,200\n财政收入,科技研发,150\n教育支出,义务教育,280\n教育支出,高等教育,150\n教育支出,职业教育,70\n医疗卫生,公立医院,180\n医疗卫生,社区卫生,80\n医疗卫生,疾病防控,40\n社会保障,养老金,120\n社会保障,失业保险,60\n社会保障,低保补贴,70';
-      ta.dispatchEvent(new Event('input', {bubbles:true}));
-    }
-  }, 500);
 })();
