@@ -1,58 +1,66 @@
-# Code Review Summary: P13-sankey-board
+# Code Review Status: P13-sankey-board
 
-This document summarizes the findings from a comprehensive review of the `Yuuqq/P13-sankey-board` repository. The findings are categorized by severity and cover architecture, security, reliability, test coverage, performance, and documentation.
+Status after the third-pass fixes. This is not a full audit of `styles.css` or of every file loaded by `../shared/releases/v2.6/loader.js`. Line numbers match the tree that contains this file.
 
-## CRITICAL
+Run `node tests/graph.test.js` for the parser and cycle checks.
 
-*(No critical issues found)*
+## Resolved
 
-## HIGH
+### Cyclic input, self-loops, duplicate edges, empty names, non-positive values
+- **File:** `graph.js` (`parseLine` line 12, `parseGraphText` line 26, `hasCycle` line 77); `app.js` (`draw` line 135, `invalidateChart` line 72)
+- **Behavior:** `#` comments are skipped. `1.2.3`, `.`, `.5`, negatives, and `value <= 0` are invalid lines. Empty names (`A ->   100`) are invalid. Self-loops increment `selfLoopCount` and are included in the status warning, including when they are the only input. Duplicate `source → target` values are summed with a nested `Map`, so `A::B -> C` and `A -> B::C` stay distinct. Cycles abort rendering. Failure, including a cycle or an empty graph, disposes the chart and blocks SVG/PNG export until the next successful draw.
 
-### 1. Reliability (Edge Case Crash): Lack of cyclic graph detection
-- **File:** `app.js` (lines 80-107, `draw()` function)
-- **Impact:** ECharts Sankey diagrams do not support cyclic dependencies (e.g., A -> B, B -> A). If a user inputs cyclic data, ECharts will fail to render, potentially throwing an error and leaving the user with a blank chart or an unhelpful status, without clear feedback.
-- **Fix Suggestion:** Implement a topological sort or simple depth-first search (DFS) to detect cycles before passing the nodes and links to ECharts. If a cycle is detected, abort rendering and display a clear error message via `setStatus()`.
+### Invalid lines are reported
+- **File:** `graph.js` `issueWarning` line 109; `app.js` `draw` line 135
+- **Behavior:** A mix of good and bad lines still draws, and the status counts ignored lines. All-invalid input counts them too, instead of the generic “no relations” line alone.
 
-### 2. Test Coverage: Lack of automated tests
-- **File:** Entire repository (No `tests/` directory)
-- **Impact:** Relying purely on manual testing (`QA.md`) increases the risk of regressions during future updates. Critical logic like regex-based line parsing (`parseLine`) and telemetry collection is currently untested.
-- **Fix Suggestion:** Introduce a testing framework (e.g., Jest or Vitest) to test core logic functions (`parseLine`, `parseGraph`), and set up Playwright or Cypress for E2E user flow testing.
+### Resize
+- **File:** `app.js` `bindResize` line 84
+- **Behavior:** One `resize` listener, 200ms debounce. Re-creating the chart does not add another listener.
 
-## MEDIUM
+### Service worker cache scope and offline shell
+- **File:** `sw.js` lines 13–33 and 63
+- **Behavior:** Cache name is `p13-sankey-board-v2`. `activate` deletes only caches with the `p13-sankey-board-` prefix, not every cache on `https://yuuqq.github.io`. Pre-cache includes `echarts.min.js`, `graph.js`, `loader.js`, and the v2.6 modules declared on `index.html` (`dark`, `cmd`, `toast`, `onboarding`, `pedagogy-p1`, `pedagogy-p2`, `nav`, `kbd`). A failed asset logs `console.warn` and does not fail the others. Non-document fetch failures respond with HTTP 504 instead of `undefined`. Cross-origin requests are not intercepted (the old “network-first for APIs” comment was wrong).
 
-### 3. Architecture: Lack of modularity and global scope pollution
-- **File:** `app.js`, `pm-metrics.js`
-- **Impact:** Both files run in the global scope or expose objects globally (e.g., `window.pmMetrics`, `let chartInstance`, `chartEl`). This makes the codebase harder to maintain, increases the risk of naming collisions, and complicates unit testing.
-- **Fix Suggestion:** Wrap the application logic in IIFEs or migrate to ES6 modules (`<script type="module">`). Explicitly pass dependencies rather than relying on the global `window` object.
+### Dead CSV auto-fill
+- **File:** `app.js` (removed)
+- **Behavior:** The 500ms IIFE that looked up `#dataInput` and could fill the textarea with CSV is gone.
 
-### 4. Reliability: Silent failure on invalid input lines
-- **File:** `app.js` (line 44, `parseLine()`)
-- **Impact:** The regex `/^\s*(.+?)\s*->\s*(.+?)\s+([0-9.]+)\s*$/` strictly requires a specific format. If a user makes a typo (e.g., negative values, missing spaces, or non-numeric trailing characters), the line is silently ignored because `parseLine` returns `null` and `filter(Boolean)` drops it. Users get no feedback on why their data wasn't rendered.
-- **Fix Suggestion:** Instead of silently filtering out invalid lines, capture them and update the status area (`setStatus`) or show a UI warning listing the lines that could not be parsed.
+### Button accessible names
+- **File:** `index.html` lines 50–52
+- **Behavior:** The draw/export buttons no longer override their Chinese labels with `aria-label="draw"` / `"export Svg"` / `"export Png"`. Print CSS hides `.actions` directly (line 21).
 
-### 5. Performance: Un-debounced window resize handler
-- **File:** `app.js` (line 67, `window.addEventListener("resize", ... )`)
-- **Impact:** The `resize` event fires continuously while the browser window is being resized. Calling `chartInstance?.resize()` on every fire can lead to layout thrashing and high CPU usage.
-- **Fix Suggestion:** Wrap the `chartInstance?.resize()` call in a debounce function (e.g., triggering only after 150-250ms of inactivity).
+### Telemetry is not an XSS sink
+- **File:** `pm-metrics.js` line 48
+- **Behavior:** `page_path` is `location.pathname + location.hash`, stored with `localStorage` only. There is no `fetch` or `sendBeacon` in this repo. That is local telemetry, not XSS.
 
-### 6. Security / Privacy: Raw URI Hash and Pathname in Telemetry
-- **File:** `pm-metrics.js` (line 46)
-- **Impact:** The payload includes `page_path: location.pathname + location.hash`. If this payload is sent to a dashboard and rendered insecurely, it could present an XSS vector. While not explicitly an XSS locally, it is an unsafe default for data collection.
-- **Fix Suggestion:** Sanitize or truncate `location.hash` before adding it to the telemetry payload, or remove it entirely if not strictly necessary for analytics.
+## Open
 
-### 7. Documentation / DX: Missing Local Development Setup
-- **File:** `README.md`
-- **Impact:** The `sw.js` (Service Worker) and some browser APIs behave differently or are blocked when opened via the `file://` protocol. The README lacks instructions on how to properly serve the project locally for development.
-- **Fix Suggestion:** Add a "Local Development" section in `README.md` advising contributors to use a local HTTP server (e.g., `npx serve .` or `python -m http.server`).
+### SPEC does not match the page
+- **File:** `SPEC.md`; noted in `QA.md`
+- **Impact:** SPEC still says form input, a node cap, and ECharts from a CDN. The page is a textarea, has no node cap, and loads `../shared/vendor/echarts.min.js` (`index.html` line 61).
+- **Severity:** Low
 
-## LOW
+### Offline coverage is the current loader list, not “any future shared file”
+- **File:** `sw.js` `CORE_ASSETS`; `index.html` line 77
+- **Impact:** Modules the loader adds later will not be pre-cached until `CORE_ASSETS` is updated. `loader.js` itself is not in this repository.
+- **Severity:** Low
 
-### 8. Architecture: Fragile dependency paths
-- **File:** `index.html` (lines 10, 52, 60), `sw.js` (lines 14, 15)
-- **Impact:** The project hardcodes paths to `../shared/` (e.g., `../shared/design-tokens.css`). This tightly couples the tool to a specific monorepo structure. If the tool is deployed independently, it will break.
-- **Fix Suggestion:** If `shared` is truly shared, consider publishing it as an npm package or using Git submodules, and bundle the assets using a build step, rather than relying on relative directory traversal out of the project root.
+### No browser-level test runner
+- **File:** `tests/graph.test.js`
+- **Impact:** Parser and cycle detection have Node assertions. Drawing, export, and the service worker are still manual.
+- **Severity:** Low
 
-### 9. Reliability: Blind error swallowing in Service Worker installation
-- **File:** `sw.js` (line 21)
-- **Impact:** The service worker silently catches errors when caching optional files `cache.add(url).catch(() => {})`. If critical assets fail to load due to network issues, developers have no visibility into the issue during debugging.
-- **Fix Suggestion:** Add a `console.warn` inside the `.catch()` block to log which specific asset failed to cache.
+### Global script, not a module
+- **File:** `app.js`, `graph.js`, `pm-metrics.js`
+- **Impact:** `graph.js` attaches `window.SankeyGraph`. `app.js` is still a classic script. Fine at this size.
+- **Severity:** Low
+
+### Local telemetry has no consent UI
+- **File:** `pm-metrics.js` (`page_path` line 48, `document.referrer` in the `page_view` handler)
+- **Impact:** Events stay in `localStorage` (capped at 500) and include referrer, path/hash, button text, and status text. The footer claim that nothing is uploaded matches the code. Not an XSS bug.
+- **Severity:** Low
+
+## Not reviewed here
+
+`styles.css` polish, and the security of SVG text inside a file the user later re-opens, were not re-audited in this pass.

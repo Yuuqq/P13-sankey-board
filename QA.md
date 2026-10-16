@@ -33,9 +33,9 @@
 
 ## Known Issues
 
-- **Issue**: 暂无已知严重问题
-- **Severity**: N/A
-- **Workaround**: N/A
+- **Issue**: `SPEC.md` 仍写表单化输入、节点数量上限和 ECharts CDN。页面实际是自由文本、无节点上限，脚本来自 `../shared/vendor/echarts.min.js`。其余未关闭项见 `REVIEW.md`。
+- **Severity**: Low
+- **Workaround**: 按页面上的「来源 -> 去向 金额」格式输入。
 
 ## Sign-Off
 
