@@ -20,15 +20,15 @@ Run `node tests/graph.test.js` for the parser and cycle checks.
 
 ### Service worker cache scope and offline shell
 - **File:** `sw.js` lines 13–33 and 63
-- **Behavior:** Cache name is `p13-sankey-board-v2`. `activate` deletes only caches with the `p13-sankey-board-` prefix, not every cache on `https://yuuqq.github.io`. Pre-cache includes `echarts.min.js`, `graph.js`, `loader.js`, and the v2.6 modules declared on `index.html` (`dark`, `cmd`, `toast`, `onboarding`, `pedagogy-p1`, `pedagogy-p2`, `nav`, `kbd`). A failed asset logs `console.warn` and does not fail the others. Non-document fetch failures respond with HTTP 504 instead of `undefined`. Cross-origin requests are not intercepted (the old “network-first for APIs” comment was wrong).
+- **Behavior:** Cache name is `p13-sankey-board-v3`. `activate` deletes only caches with the `p13-sankey-board-` prefix, not every cache on `https://yuuqq.github.io`. Pre-cache includes `echarts.min.js`, `favicon.svg`, `design-tokens.css`, `modern-styles.css`, `tool-chrome.css`, `graph.js`, `loader.js`, and the v2.6 modules declared on `index.html` (`dark`, `cmd`, `toast`, `onboarding`, `pedagogy-p1`, `pedagogy-p2`, `nav`, `kbd`). A failed asset logs `console.warn` and does not fail the others. Non-document fetch failures respond with HTTP 504 instead of `undefined`. Cross-origin requests are not intercepted (the old “network-first for APIs” comment was wrong).
 
 ### Dead CSV auto-fill
 - **File:** `app.js` (removed)
 - **Behavior:** The 500ms IIFE that looked up `#dataInput` and could fill the textarea with CSV is gone.
 
 ### Button accessible names
-- **File:** `index.html` lines 50–52
-- **Behavior:** The draw/export buttons no longer override their Chinese labels with `aria-label="draw"` / `"export Svg"` / `"export Png"`. Print CSS hides `.actions` directly (line 21).
+- **File:** `index.html` lines 48–52
+- **Behavior:** The draw/export buttons no longer override their Chinese labels with `aria-label="draw"` / `"export Svg"` / `"export Png"`. Print CSS hides `.actions` in `styles.css`.
 
 ### Telemetry is not an XSS sink
 - **File:** `pm-metrics.js` line 48
@@ -38,12 +38,12 @@ Run `node tests/graph.test.js` for the parser and cycle checks.
 
 ### SPEC does not match the page
 - **File:** `SPEC.md`; noted in `QA.md`
-- **Impact:** SPEC still says form input, a node cap, and ECharts from a CDN. The page is a textarea, has no node cap, and loads `../shared/vendor/echarts.min.js` (`index.html` line 61).
+- **Impact:** SPEC still says form input, a node cap, and ECharts from a CDN. The page is a textarea, has no node cap, and loads `../shared/vendor/echarts.min.js` (`index.html` line 66).
 - **Severity:** Low
 
 ### Offline coverage is the current loader list, not “any future shared file”
-- **File:** `sw.js` `CORE_ASSETS`; `index.html` line 77
-- **Impact:** Modules the loader adds later will not be pre-cached until `CORE_ASSETS` is updated. `loader.js` itself is not in this repository.
+- **File:** `sw.js` `CORE_ASSETS`; `index.html` line 70
+- **Impact:** Modules the loader adds later will not be pre-cached until `CORE_ASSETS` is updated. `loader.js` itself is not in this repository (`index.html` line 70).
 - **Severity:** Low
 
 ### No browser-level test runner

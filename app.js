@@ -225,10 +225,11 @@ function exportSvg() {
 function exportPng() {
   try {
     if (!canExportChart()) return;
+    const paper = getComputedStyle(document.documentElement).getPropertyValue("--paper-3").trim() || "#EFE4C6";
     const dataUrl = chartInstance.getDataURL({
       type: "png",
       pixelRatio: 3,
-      backgroundColor: "#fff"
+      backgroundColor: paper
     });
     const a = document.createElement("a");
     a.href = dataUrl;
