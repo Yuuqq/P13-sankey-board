@@ -11,15 +11,18 @@
  * 4. Offline document fallback to ./index.html
  */
 const CACHE_PREFIX = "p13-sankey-board-";
-const CACHE_NAME = "p13-sankey-board-v2";
+const CACHE_NAME = "p13-sankey-board-v3";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./favicon.svg",
   "./graph.js",
   "./app.js",
   "./pm-metrics.js",
   "../shared/design-tokens.css",
+  "../shared/modern-styles.css",
+  "../shared/tool-chrome.css",
   "../shared/vendor/echarts.min.js",
   "../shared/releases/v2.6/loader.js",
   "../shared/releases/v2.6/dark-toggle.js",
